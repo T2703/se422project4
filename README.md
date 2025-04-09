@@ -1,7 +1,11 @@
-Run this before running the app.
+Initialize gcloud if you haven't already.
 
-``` export DB_USER=se422project3 && export DB_PASSWORD=se422pass && export DB_NAME=photogallery && export DB_CONNECTION_NAME=se-422-452919:us-central1:se422project3 ```
+``` gcloud init ``` (choose region us-central1 or us-central1b)
 
-Also run this if the app is still not running.
+Run this to run the app.
 
-``` pipx install virtualenv && pipx run virtualenv venv && source venv/bin/activate && pip install -r requirements.txt ```
+``` gcloud app deploy ```
+
+Run this to get redirected to the app.
+
+``` gcloud app browse```
