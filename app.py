@@ -36,8 +36,11 @@ pymysql.install_as_MySQLdb()
 import MySQLdb
 app = Flask(__name__, static_url_path="")
 
-UPLOAD_FOLDER = os.path.join(app.root_path,'media')
-app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'media')
+# Use current directory for uploads instead of a read-only system path
+UPLOAD_FOLDER = '/tmp/media'
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
@@ -157,7 +160,7 @@ def add_photo():
             timestamp = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
 
             # Generate a URL for serving the image
-            file_url = f"/uploads/{filename}"
+            file_url = f"/media/{filename}"
 
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -190,7 +193,7 @@ def view_photo(photoID):
 
 @app.route('/media/<path:filename>')
 def serve_media(filename):
-    return send_from_directory('media', filename)
+    return send_from_directory('/tmp/media', filename)
 
 @app.route('/search', methods=['GET'])
 def search_page():
