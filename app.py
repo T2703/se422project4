@@ -83,6 +83,7 @@ def getExifData(path_name):
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
+    message = request.args.get('message', '')
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
@@ -129,7 +130,7 @@ def create_user():
         conn.commit()
         conn.close()
 
-        return render_template('index.html', message="User created successfully. Please log in.")
+        return redirect(url_for('login', message="User created successfully. Please log in."))
 
     return render_template('create-user.html')
 
