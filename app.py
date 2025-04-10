@@ -23,7 +23,7 @@ SOFTWARE.
 '''
 
 #!flask/bin/python
-from flask import Flask, jsonify, abort, request, make_response, url_for, render_template, redirect, Response, send_from_directory
+from flask import Flask, jsonify, abort, request, make_response, url_for, render_template, redirect, Response, send_from_directory, send_file
 from urllib.parse import quote
 import os
 import time
@@ -32,12 +32,12 @@ import exifread
 import json
 import pymysql
 import requests
+from io import BytesIO
+from google.cloud import storage
+
 pymysql.install_as_MySQLdb()
 import MySQLdb
 app = Flask(__name__, static_url_path="")
-
-UPLOAD_FOLDER = os.path.join(app.root_path,'media')
-app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'media')
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
@@ -56,6 +56,15 @@ def get_db_connection():
         db=DB_NAME
     )
 
+
+def upload_to_gcs(local_file_path, filename, bucket_name):
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(filename)
+    blob.upload_from_filename(local_file_path)
+    return f"https://storage.googleapis.com/{bucket_name}/{filename}"
+
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -71,9 +80,6 @@ def getExifData(path_name):
     with open(path_name, 'rb') as f:
         tags = exifread.process_file(f)
     return {tag: str(tags[tag]) for tag in tags if tag not in ('JPEGThumbnail', 'TIFFThumbnail', 'Filename', 'EXIF MakerNote')}
-
-from werkzeug.security import check_password_hash
-import MySQLdb
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -149,15 +155,15 @@ def add_photo():
 
         if file and allowed_file(file.filename):
             filename = file.filename
-            file_path = os.path.join(UPLOAD_FOLDER, filename)
-            file.save(file_path)
+            temp_path = os.path.join('/tmp', filename)
+            file.save(temp_path)
 
-            ExifData = getExifData(file_path)
+            bucket_name = 'se422_photogallery'
+            file_url = upload_to_gcs(temp_path, filename, bucket_name)
+
+            ExifData = getExifData(temp_path)
             ts = time.time()
             timestamp = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
-
-            # Generate a URL for serving the image
-            file_url = f"/uploads/{filename}"
 
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -190,7 +196,8 @@ def view_photo(photoID):
 
 @app.route('/media/<path:filename>')
 def serve_media(filename):
-    return send_from_directory('media', filename)
+    return redirect(f"https://storage.googleapis.com/se422_photogallery/{filename}")
+
 
 @app.route('/search', methods=['GET'])
 def search_page():
@@ -214,8 +221,22 @@ def search_page():
 @app.route('/download/<filename>')
 def download_file(filename):
     """Serve a file from the local UPLOAD_FOLDER."""
-    return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=True)
+    bucket_name = 'se422_photogallery'
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(filename)
 
+    # Read content into memory
+    file_data = blob.download_as_bytes()
+
+    # Create in-memory file object
+    file_obj = BytesIO(file_data)
+
+    return send_file(
+        file_obj,
+        download_name=filename,
+        as_attachment=True
+    )
 
 if __name__ == '__main__':
     app.run(debug=True, host="0.0.0.0", port=8080)
